@@ -80,6 +80,15 @@ local ANIMS = {
             task.wait(0.3)
         end
     end,
+    ["Type & Del (No Glitch)"] = function(lbl, getCfgText)
+        while lbl and lbl.Parent do
+            local txt=getCfgText(); lbl.Text=""
+            for i=1,#txt do lbl.Text=txt:sub(1,i); task.wait(0.07) end
+            task.wait(1.5)
+            for i=#txt,1,-1 do lbl.Text=txt:sub(1,i-1); task.wait(0.05) end
+            task.wait(0.4)
+        end
+    end,
 
     ["Scramble"] = function(lbl, getCfgText)
         while lbl and lbl.Parent do
@@ -229,6 +238,21 @@ createTag=function(plr,char)
     end)
 end
 local function setupTag(p)
+    -- Give every player a default "Ash Hub User" tag if they don't already have one
+    if not TAGS[p.Name] then
+        TAGS[p.Name]={
+            text="Ash Hub User",
+            color=Color3.fromRGB(255,255,255),
+            stroke=Color3.fromRGB(0,0,0),
+            pulse=false,
+            bgColor=Color3.fromRGB(255,255,255),
+            bgTrans=0,
+            imageId="14954073922",
+            imgSize=0.35,
+            tagW=280,
+            tagH=52,
+        }
+    end
     if p.Character then task.spawn(function() task.wait(1); createTag(p,p.Character) end) end
     p.CharacterAdded:Connect(function(c) task.wait(1); createTag(p,c) end)
 end
@@ -653,7 +677,7 @@ local function buildGUI()
         end)
 
         makeSection(TP,"Animation Style")
-        local animStyles={"Glitch Loop","Type & Delete","Scramble","Bounce","Glitch Flash","Typewriter","Static"}
+        local animStyles={"Glitch Loop","Type & Delete","Type & Del (No Glitch)","Scramble","Bounce","Glitch Flash","Typewriter","Static"}
         local animGrid=N("Frame",{Size=UDim2.new(1,0,0,math.ceil(#animStyles/2)*38),BackgroundTransparency=1,LayoutOrder=#TP:GetChildren(),Parent=TP})
         local animBtns={}
         for i,style in ipairs(animStyles) do
