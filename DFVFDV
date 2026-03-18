@@ -1,0 +1,615 @@
+-- LocalScript (execute with your executor)
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local ContentProvider = game:GetService("ContentProvider")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Chat = game:GetService("Chat")
+local StarterGui = game:GetService("StarterGui")
+
+local localPlayer = Players.LocalPlayer
+
+---------------------------------------------------------------------
+-- ROLES (username → role)
+---------------------------------------------------------------------
+
+local ROLES = {
+    ["unicornman_27"] = "Owner",  -- change to your exact username
+    -- ["FriendAdminName"] = "Admin",
+    -- ["FriendUserName"]  = "User",
+}
+
+local CROWN_ASSET_ID = "rbxassetid://11767039004"
+local FAR_HIDE_DISTANCE = 60 -- studs
+
+local function typewriter(label, fullText, delayTime)
+    label.Text = ""
+    for i = 1, #fullText do
+        label.Text = string.sub(fullText, 1, i)
+        task.wait(delayTime)
+    end
+end
+
+---------------------------------------------------------------------
+-- LOADING SCREEN
+---------------------------------------------------------------------
+
+local loadingGui = Instance.new("ScreenGui")
+loadingGui.Name = "LoadingScreen"
+loadingGui.ResetOnSpawn = false
+loadingGui.DisplayOrder = 999
+loadingGui.IgnoreGuiInset = true
+loadingGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+local bg = Instance.new("Frame")
+bg.Size = UDim2.new(1, 0, 1, 0)
+bg.BackgroundColor3 = Color3.new(0, 0, 0)
+bg.BorderSizePixel = 0
+bg.Parent = loadingGui
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0, 600, 0, 60)
+titleLabel.Position = UDim2.new(0.5, -300, 0.35, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "LOADING..."
+titleLabel.TextColor3 = Color3.fromRGB(180, 0, 255)
+titleLabel.TextSize = 36
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextTransparency = 1
+titleLabel.Parent = bg
+
+local percentLabel = Instance.new("TextLabel")
+percentLabel.Size = UDim2.new(0, 500, 0, 24)
+percentLabel.Position = UDim2.new(0.5, -250, 0.58, 0)
+percentLabel.BackgroundTransparency = 1
+percentLabel.Text = "0%"
+percentLabel.TextColor3 = Color3.fromRGB(200, 150, 255)
+percentLabel.TextSize = 14
+percentLabel.Font = Enum.Font.Gotham
+percentLabel.TextTransparency = 1
+percentLabel.Parent = bg
+
+local barBg = Instance.new("Frame")
+barBg.Size = UDim2.new(0, 500, 0, 12)
+barBg.Position = UDim2.new(0.5, -250, 0.55, 0)
+barBg.BackgroundColor3 = Color3.fromRGB(30, 0, 50)
+barBg.BorderSizePixel = 0
+barBg.Parent = bg
+
+local barBgCorner = Instance.new("UICorner")
+barBgCorner.CornerRadius = UDim.new(0, 6)
+barBgCorner.Parent = barBg
+
+local barFill = Instance.new("Frame")
+barFill.Size = UDim2.new(0, 0, 1, 0)
+barFill.BackgroundColor3 = Color3.fromRGB(140, 0, 255)
+barFill.BorderSizePixel = 0
+barFill.Parent = barBg
+
+local barFillCorner = Instance.new("UICorner")
+barFillCorner.CornerRadius = UDim.new(0, 6)
+barFillCorner.Parent = barFill
+
+local barGlow = Instance.new("UIGradient")
+barGlow.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 0, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 0, 200)),
+})
+barGlow.Parent = barFill
+
+local sound = Instance.new("Sound")
+sound.SoundId = "rbxassetid://6056177578"
+sound.Volume = 0.8
+sound.Looped = true
+sound.Parent = loadingGui
+sound:Play()
+
+local function animateBar(duration)
+    local steps = 100
+    local stepTime = duration / steps
+    for i = 1, steps do
+        local pct = i / steps
+        TweenService:Create(
+            barFill,
+            TweenInfo.new(stepTime, Enum.EasingStyle.Linear),
+            { Size = UDim2.new(pct, 0, 1, 0) }
+        ):Play()
+        percentLabel.Text = math.floor(pct * 100) .. "%"
+        task.wait(stepTime)
+    end
+end
+
+TweenService:Create(titleLabel, TweenInfo.new(0.8), {TextTransparency = 0}):Play()
+TweenService:Create(percentLabel, TweenInfo.new(0.8), {TextTransparency = 0}):Play()
+
+---------------------------------------------------------------------
+-- GOKU TP
+---------------------------------------------------------------------
+
+local function gokuTeleportTo(targetPlr)
+    if not targetPlr or targetPlr == localPlayer then return end
+
+    local localChar = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    local targetChar = targetPlr.Character
+    if not targetChar then return end
+
+    local hrp = localChar:FindFirstChild("HumanoidRootPart")
+    local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+    if not hrp or not targetHRP then return end
+
+    local targetCFrame = targetHRP.CFrame * CFrame.new(0, 0, -3)
+    TweenService:Create(
+        hrp,
+        TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        { CFrame = targetCFrame }
+    ):Play()
+end
+
+---------------------------------------------------------------------
+-- DISTANCE-BASED TEXT VISIBILITY
+---------------------------------------------------------------------
+
+local function hookDistanceVisibility(billboard, label)
+    local head = billboard.Adornee
+    if not head then return end
+
+    RunService.RenderStepped:Connect(function()
+        if not head.Parent or not billboard.Parent then
+            return
+        end
+        local cam = workspace.CurrentCamera
+        if not cam then return end
+
+        local dist = (cam.CFrame.Position - head.Position).Magnitude
+        if dist > FAR_HIDE_DISTANCE then
+            label.TextTransparency = 1
+            label.TextStrokeTransparency = 1
+        else
+            label.TextTransparency = 0
+            label.TextStrokeTransparency = 0.35
+        end
+    end)
+end
+
+---------------------------------------------------------------------
+-- TAGS
+---------------------------------------------------------------------
+
+local function createTag(plr, character)
+    local role = ROLES[plr.Name]
+    if not role then
+        return
+    end
+
+    local head = character:FindFirstChild("Head") or character:WaitForChild("Head", 5)
+    if not head then return end
+
+    local existing = head:FindFirstChild("RoleTag")
+    if existing then existing:Destroy() end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "RoleTag"
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 420, 0, 70)
+    billboard.StudsOffset = Vector3.new(0, 3.1, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = head
+
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, 0, 1, 0)
+    container.BorderSizePixel = 0
+    container.Parent = billboard
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 14)
+    corner.Parent = container
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 3
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Parent = container
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.VerticalAlignment = Enum.VerticalAlignment.Center
+    layout.Padding = UDim.new(0, 10)
+    layout.Parent = container
+
+    local crownHolder = Instance.new("Frame")
+    crownHolder.Size = UDim2.new(0, 44, 1, -10)
+    crownHolder.BackgroundTransparency = 1
+    crownHolder.Parent = container
+
+    local label = Instance.new("TextLabel")
+    label.BackgroundTransparency = 1
+    label.Size = UDim2.new(1, -44, 1, -10)
+    label.Font = Enum.Font.GothamBold
+    label.TextScaled = true
+    label.TextStrokeTransparency = 0.35
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
+    label.Parent = container
+
+    local click = Instance.new("TextButton")
+    click.BackgroundTransparency = 1
+    click.Text = ""
+    click.Size = UDim2.new(1, 0, 1, 0)
+    click.Parent = container
+    click.MouseButton1Click:Connect(function()
+        gokuTeleportTo(plr)
+    end)
+
+    if role == "Owner" then
+        container.BackgroundColor3 = Color3.new(1, 1, 1)
+        stroke.Color = Color3.fromRGB(180, 0, 255)
+        label.TextColor3 = Color3.fromRGB(140, 0, 255)
+
+        local crown = Instance.new("ImageLabel")
+        crown.Size = UDim2.new(0, 38, 0, 38)
+        crown.Position = UDim2.new(0.5, -19, 0.5, -19)
+        crown.BackgroundTransparency = 1
+        crown.Image = CROWN_ASSET_ID
+        crown.Parent = crownHolder
+
+        task.spawn(function()
+            typewriter(label, "I own yall", 0.04)
+        end)
+    else
+        container.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        stroke.Color = Color3.fromRGB(255, 0, 0)
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+        if role == "Admin" then
+            label.Text = "AR ADMIN"
+        else
+            label.Text = "USER"
+        end
+
+        crownHolder.Size = UDim2.new(0, 0, 1, -10)
+        label.Size = UDim2.new(1, 0, 1, -10)
+    end
+
+    hookDistanceVisibility(billboard, label)
+end
+
+---------------------------------------------------------------------
+-- FREEZE + FAKE CHAT
+---------------------------------------------------------------------
+
+local frozen = {} -- [Player] = true/false
+
+local function setFrozen(plr, state)
+    local char = plr.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+
+    frozen[plr] = state
+
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            part.Anchored = state
+        end
+    end
+
+    if state then
+        humanoid.WalkSpeed = 0
+        humanoid.JumpPower = 0
+    else
+        humanoid.WalkSpeed = 16
+        humanoid.JumpPower = 50
+    end
+end
+
+local function getTargetsFromArg(arg)
+    arg = string.lower(arg)
+    local targets = {}
+
+    if arg == "all" then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if ROLES[plr.Name] then
+                table.insert(targets, plr)
+            end
+        end
+    else
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if string.sub(string.lower(plr.Name), 1, #arg) == arg then
+                table.insert(targets, plr)
+            end
+        end
+    end
+
+    return targets
+end
+
+local function fakeSay(targetPlr, message)
+    local char = targetPlr.Character
+    if not char then return end
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+
+    Chat:Chat(head, message, Enum.ChatColor.White)
+
+    pcall(function()
+        StarterGui:SetCore("ChatMakeSystemMessage", {
+            Text = targetPlr.Name .. ": " .. message;
+            Color = Color3.new(1, 1, 1);
+        })
+    end)
+end
+
+---------------------------------------------------------------------
+-- EXTRA FUN COMMAND HELPERS
+---------------------------------------------------------------------
+
+local function getPlayerFromArg(arg)
+    arg = string.lower(arg)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if string.sub(string.lower(plr.Name), 1, #arg) == arg then
+            return plr
+        end
+    end
+end
+
+local function spinPlayer(plr)
+    local char = plr.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    task.spawn(function()
+        local start = tick()
+        while tick() - start < 6 and task.wait() do
+            hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(25), 0)
+        end
+    end)
+end
+
+local function orbitPlayerAroundYou(plr)
+    local char = plr.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local myChar = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return end
+
+    task.spawn(function()
+        local start = tick()
+        local radius = 5
+        while tick() - start < 8 and task.wait() do
+            local t = tick() * 2
+            local offset = Vector3.new(math.cos(t) * radius, 0, math.sin(t) * radius)
+            hrp.CFrame = CFrame.new(myHRP.Position + offset, myHRP.Position)
+        end
+    end)
+end
+
+local function tpMeTo(plr)
+    local myChar = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+    local char = plr.Character
+    if not myHRP or not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    TweenService:Create(
+        myHRP,
+        TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        { CFrame = hrp.CFrame * CFrame.new(0, 0, -3) }
+    ):Play()
+end
+
+local function tpHere(plr)
+    local myChar = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+    local char = plr.Character
+    if not myHRP or not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    TweenService:Create(
+        hrp,
+        TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        { CFrame = myHRP.CFrame * CFrame.new(0, 0, -3) }
+    ):Play()
+end
+
+local function sparklePlayer(plr)
+    local char = plr.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local p = Instance.new("ParticleEmitter")
+    p.Name = "AR_Sparkles"
+    p.Texture = "rbxassetid://241594408"
+    p.Color = ColorSequence.new(Color3.fromRGB(255,0,255), Color3.fromRGB(0,255,255))
+    p.Rate = 40
+    p.Lifetime = NumberRange.new(0.4, 0.6)
+    p.Speed = NumberRange.new(1, 3)
+    p.Parent = hrp
+
+    task.delay(8, function()
+        if p then p:Destroy() end
+    end)
+end
+
+local function spamFakeSay(plr, message)
+    for i = 1, 10 do
+        fakeSay(plr, message)
+        task.wait(0.15)
+    end
+end
+
+---------------------------------------------------------------------
+-- OWNER COMMAND BAR (ALWAYS VISIBLE)
+---------------------------------------------------------------------
+
+local cmdGui = Instance.new("ScreenGui")
+cmdGui.Name = "AR_CommandBar"
+cmdGui.ResetOnSpawn = false
+cmdGui.DisplayOrder = 1000
+cmdGui.IgnoreGuiInset = true
+cmdGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+local commandFrame = Instance.new("Frame")
+commandFrame.Parent = cmdGui
+commandFrame.Size = UDim2.new(0, 400, 0, 32)
+commandFrame.Position = UDim2.new(0.5, -200, 1, -60)
+commandFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+commandFrame.BorderSizePixel = 0
+commandFrame.Visible = (ROLES[localPlayer.Name] == "Owner") -- only owner sees it
+
+local cfCorner = Instance.new("UICorner")
+cfCorner.CornerRadius = UDim.new(0, 8)
+cfCorner.Parent = commandFrame
+
+local cfStroke = Instance.new("UIStroke")
+cfStroke.Color = Color3.fromRGB(180, 0, 255)
+cfStroke.Thickness = 2
+cfStroke.Parent = commandFrame
+
+local cmdBox = Instance.new("TextBox")
+cmdBox.Size = UDim2.new(1, -12, 1, -8)
+cmdBox.Position = UDim2.new(0, 6, 0, 4)
+cmdBox.BackgroundTransparency = 1
+cmdBox.Text = ""
+cmdBox.PlaceholderText = ";freeze, ;say, ;spin, ;orbit, ;tpme, ;tphere, ;sparkle, ;spam"
+cmdBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+cmdBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+cmdBox.Font = Enum.Font.Gotham
+cmdBox.TextSize = 16
+cmdBox.ClearTextOnFocus = false
+cmdBox.Parent = commandFrame
+
+if commandFrame.Visible then
+    cmdBox:CaptureFocus()
+end
+
+cmdBox.FocusLost:Connect(function(enterPressed)
+    if not enterPressed then return end
+    if ROLES[localPlayer.Name] ~= "Owner" then return end
+
+    local text = string.lower(cmdBox.Text)
+    cmdBox.Text = ""
+
+    if string.sub(text, 1, 1) == ";" then
+        text = string.sub(text, 2)
+    end
+
+    local parts = {}
+    for token in string.gmatch(text, "%S+") do
+        table.insert(parts, token)
+    end
+    local cmd = parts[1]
+    local arg = parts[2] or ""
+
+    if not cmd then return end
+
+    if cmd == "freeze" and arg ~= "" then
+        for _, plr in ipairs(getTargetsFromArg(arg)) do
+            setFrozen(plr, true)
+        end
+
+    elseif cmd == "unfreeze" and arg ~= "" then
+        for _, plr in ipairs(getTargetsFromArg(arg)) do
+            setFrozen(plr, false)
+        end
+
+    elseif cmd == "say" and arg ~= "" then
+        local targetName = arg
+        local msg = table.concat(parts, " ", 3)
+        if msg ~= "" then
+            local targets = getTargetsFromArg(targetName)
+            for _, plr in ipairs(targets) do
+                fakeSay(plr, msg)
+            end
+        end
+
+    elseif cmd == "spin" and arg ~= "" then
+        local plr = getPlayerFromArg(arg)
+        if plr then spinPlayer(plr) end
+
+    elseif cmd == "orbit" and arg ~= "" then
+        local plr = getPlayerFromArg(arg)
+        if plr then orbitPlayerAroundYou(plr) end
+
+    elseif cmd == "tpme" and arg ~= "" then
+        local plr = getPlayerFromArg(arg)
+        if plr then tpMeTo(plr) end
+
+    elseif cmd == "tphere" and arg ~= "" then
+        local plr = getPlayerFromArg(arg)
+        if plr then tpHere(plr) end
+
+    elseif cmd == "sparkle" and arg ~= "" then
+        local plr = getPlayerFromArg(arg)
+        if plr then sparklePlayer(plr) end
+
+    elseif cmd == "spam" and arg ~= "" then
+        local targetName = arg
+        local msg = table.concat(parts, " ", 3)
+        if msg ~= "" then
+            local plr = getPlayerFromArg(targetName)
+            if plr then spamFakeSay(plr, msg) end
+        end
+    end
+
+    -- re-focus so you can type next command quickly
+    cmdBox:CaptureFocus()
+end)
+
+---------------------------------------------------------------------
+-- PLAYER HOOKS
+---------------------------------------------------------------------
+
+local function onCharacterAdded(plr, character)
+    task.wait(1)
+    createTag(plr, character)
+end
+
+local function setupPlayer(plr)
+    if plr.Character then
+        onCharacterAdded(plr, plr.Character)
+    end
+    plr.CharacterAdded:Connect(function(char)
+        onCharacterAdded(plr, char)
+    end)
+end
+
+---------------------------------------------------------------------
+-- RUN
+---------------------------------------------------------------------
+
+task.spawn(function()
+    if not game:IsLoaded() then
+        game.Loaded:Wait()
+    end
+
+    ContentProvider:PreloadAsync({ "rbxassetid://6056177578" })
+
+    animateBar(3.5)
+    task.wait(0.4)
+
+    TweenService:Create(sound, TweenInfo.new(1), {Volume = 0}):Play()
+    TweenService:Create(bg, TweenInfo.new(1.2, Enum.EasingStyle.Quad), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(titleLabel, TweenInfo.new(0.8), {TextTransparency = 1}):Play()
+    TweenService:Create(percentLabel, TweenInfo.new(0.8), {TextTransparency = 1}):Play()
+    TweenService:Create(barBg, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(barFill, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
+
+    task.wait(1.5)
+    sound:Stop()
+    loadingGui:Destroy()
+end)
+
+for _, plr in ipairs(Players:GetPlayers()) do
+    setupPlayer(plr)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
+
+print("LocalPlayer =", localPlayer.Name)
